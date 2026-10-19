@@ -1,4 +1,4 @@
-name: Publish to PyPI (reusable)
+name: Test and build Python package (reusable)
 
 on:
   workflow_call:
@@ -15,10 +15,6 @@ on:
         description: "pdm dependency group that contains the test dependencies"
         type: string
         default: "test"
-      environment:
-        description: "GitHub environment configured as Trusted Publisher in PyPI"
-        type: string
-        default: "pypi"
 
 jobs:
   test:
@@ -51,16 +47,3 @@ jobs:
         with:
           name: dist
           path: dist/
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
