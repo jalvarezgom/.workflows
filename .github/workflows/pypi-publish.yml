@@ -1,0 +1,69 @@
+name: Publish to PyPI (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        description: "JSON array of Python versions to test against"
+        type: string
+        default: '["3.10", "3.11", "3.12"]'
+      build-python-version:
+        description: "Python version used to build the distribution"
+        type: string
+        default: "3.12"
+      test-group:
+        description: "pdm dependency group that contains the test dependencies"
+        type: string
+        default: "test"
+      environment:
+        description: "GitHub environment configured as Trusted Publisher in PyPI"
+        type: string
+        default: "pypi"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ${{ fromJSON(inputs.python-versions) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pdm install -G ${{ inputs.test-group }}
+      - run: pdm run pytest
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: ${{ inputs.build-python-version }}
+      - name: Check tag matches pyproject version
+        run: |
+          VERSION=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pyproject version v$VERSION"
+            exit 1
+          fi
+      - run: pdm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
